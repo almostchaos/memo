@@ -1,11 +1,11 @@
 (ns memo.service
-  (:require [org.httpkit.server :as hk]
+  (:require [org.httpkit.server :as http]
             [compojure.core :refer :all]
             [compojure.route :as route]
             [ring.middleware.params]
             [ring.middleware.json :refer :all]
             [taoensso.timbre :refer [trace debug info warn error spy]]
-            [memo.scheduler :as s]))
+            [memo.scheduler :as memo]))
 
 (defmacro on-term-signal [& handler]
   `(.addShutdownHook (Runtime/getRuntime)
@@ -17,24 +17,23 @@
 
 (defn -main [& args]
   (info "Starting service...")
-  (let [scheduler (s/run url)
+  (let [scheduler (memo/run url)
 
         app (routes
               (POST "/schedule" [:as request]
                 (let [body (:body request)]
-                  (s/schedule scheduler "webhooks" "2 * 2 * *" "bla")
+                  (memo/schedule scheduler "webhooks" "2 * 2 * *" "bla")
                   {:body body}))
               (POST "/unschedule" [:as request]
                 (let [body (:body request)]
-                  (s/unschedule scheduler "3456v345ty345vt5vtcbhdrtt")
+                  (memo/unschedule scheduler "3456v345ty345vt5vtcbhdrtt")
                   {:body body}))
               (GET "/schedules" [:as request]
-                (let [body (:body request)]
-                  (s/schedules scheduler)
-                  {:body {}}))
+                  (memo/schedules scheduler)
+                  {:body {}})
               (route/not-found "unknown endpoint"))
 
-        shutdown-server (hk/run-server
+        shutdown-server (http/run-server
                           (-> app
                               ring.middleware.json/wrap-json-body
                               ring.middleware.json/wrap-json-response)
@@ -44,5 +43,5 @@
     (on-term-signal
       (info "Stopping service...")
       (shutdown-server)
-      (s/shutdown scheduler)
+      (memo/shutdown scheduler)
       (info "Stopped server."))))
