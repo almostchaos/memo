@@ -25,4 +25,8 @@
     (info "Stopping scheduler...")
     (info "Stopped scheduler.")))
 
-(defn run [url] (AmqpScheduler. url))
+(defn run [url]
+  (info "Starting scheduler...")
+  (let [scheduler (AmqpScheduler. url)]
+    (info "Started scheduler.")
+    scheduler))
