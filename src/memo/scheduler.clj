@@ -23,7 +23,8 @@
   (unschedule [self id]
     (debug (str "id: " id)))
   (schedules [self]
-    (debug "schedules"))
+    (debug "schedules")
+    [])
   (shutdown [self]
     (info "stopping scheduler...")
     (amqp#core/close connection)

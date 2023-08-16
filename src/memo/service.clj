@@ -13,7 +13,7 @@
                                 (debug "sigterm captured")
                                 ~@handler))))
 
-(def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.249"))
+(def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.142"))
 
 (defn -main [& args]
   (info "starting service...")
@@ -26,11 +26,10 @@
                   {:body body}))
               (POST "/unschedule" [:as request]
                 (let [body (:body request)]
-                  (memo/unschedule scheduler "3456v345ty345vt5vtcbhdrtt")
+                  (memo/unschedule scheduler (get body "id"))
                   {:body body}))
-              (GET "/schedules" [:as request]
-                  (memo/schedules scheduler)
-                  {:body {}})
+              (GET "/schedules" []
+                  {:body (memo/schedules scheduler)})
               (route/not-found "unknown endpoint"))
 
         shutdown-server (http/run-server
