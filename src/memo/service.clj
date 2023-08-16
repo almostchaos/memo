@@ -16,20 +16,21 @@
 (def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.249"))
 
 (defn -main [& args]
+  (info "Starting service...")
   (let [scheduler (s/run url)
 
         app (routes
               (POST "/schedule" [:as request]
                 (let [body (:body request)]
-                  (debug (s/schedule scheduler "webhooks" "2 * 2 * *" "bla"))
+                  (s/schedule scheduler "webhooks" "2 * 2 * *" "bla")
                   {:body body}))
               (POST "/unschedule" [:as request]
                 (let [body (:body request)]
-                  (debug (s/unschedule scheduler "3456v345ty345vt5vtcbhdrtt"))
+                  (s/unschedule scheduler "3456v345ty345vt5vtcbhdrtt")
                   {:body body}))
               (GET "/schedules" [:as request]
                 (let [body (:body request)]
-                  (debug (s/schedules scheduler))
+                  (s/schedules scheduler)
                   {:body {}}))
               (route/not-found "unknown endpoint"))
 
@@ -38,9 +39,10 @@
                               ring.middleware.json/wrap-json-body
                               ring.middleware.json/wrap-json-response)
                           {:port 8080})]
-    (println "Started server.")
+
+    (info "Started service.")
     (on-term-signal
-      (info "Stopping server...")
+      (info "Stopping service...")
       (shutdown-server)
       (s/shutdown scheduler)
       (info "Stopped server."))))

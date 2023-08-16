@@ -22,6 +22,7 @@
   (schedules [self]
     (debug "schedules"))
   (shutdown [self]
-    (info "shutdown scheduler")))
+    (info "Stopping scheduler...")
+    (info "Stopped scheduler.")))
 
 (defn run [url] (AmqpScheduler. url))
