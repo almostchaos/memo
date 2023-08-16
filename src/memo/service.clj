@@ -13,18 +13,24 @@
                                 (debug "sigterm captured")
                                 ~@handler))))
 
-(def app
-  (routes
-    (POST "/schedule" [:as request]
-      (let [body (:body request)]
-        (debug body)
-        {:body body}))
-    (route/not-found "<h1>Page not found</h1>")))
-
 (defn -main [& args]
-  (let [shutdown-server (hk/run-server
+  (let [app (routes
+              (POST "/schedule" [:as request]
+                (let [body (:body request)]
+                  (debug body)
+                  {:body body}))
+              (POST "/unschedule" [:as request]
+                (let [body (:body request)]
+                  (debug body)
+                  {:body body}))
+              (GET "/schedules" [:as request]
+                (let [body (:body request)]
+                  (debug body)
+                  {:body body}))
+              (route/not-found "unknown endpoint"))
+
+        shutdown-server (hk/run-server
                           (-> app
-                              ring.middleware.params/wrap-params
                               ring.middleware.json/wrap-json-body
                               ring.middleware.json/wrap-json-response)
                           {:port 8080})]
