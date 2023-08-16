@@ -1,0 +1,21 @@
+version: "3.4"
+
+services:
+  memo:
+    build:
+      context: ./
+    command: [ "clojure", "-M", "-m", "memo.service" ]
+    ports:
+      - "8080:8080"
+    environment:
+      - CLOUDAMQP_URL="amqp://guest:guest@rabbitmq"
+    logging:
+      driver: "local"
+
+  rabbitmq:
+    image: arm64v8/rabbitmq
+    ports:
+      - "8000:15672"
+    logging:
+      driver: "local"
+
