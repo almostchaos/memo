@@ -9,6 +9,8 @@ services:
       - "8080:8080"
     environment:
       - CLOUDAMQP_URL=amqp://guest:guest@rabbitmq
+    depends_on:
+      - rabbitmq
     logging:
       driver: "local"
 
