@@ -7,3 +7,22 @@
             [langohr.basic :as amqp#basic])
   (:require
     [taoensso.timbre :refer [trace  debug  info  warn  error  spy]]))
+
+(defprotocol Scheduler
+  (schedule [self dest cron message])
+  (unschedule [self id])
+  (schedules [self])
+  (shutdown [self]))
+
+(deftype AmqpScheduler [url]
+  Scheduler
+  (schedule [self dest cron message]
+    (debug (str "dest: " dest " cron: " cron " message: " message)))
+  (unschedule [self id]
+    (debug (str "id: " id)))
+  (schedules [self]
+    (debug "schedules"))
+  (shutdown [self]
+    (info "shutdown scheduler")))
+
+(defn run [url] (AmqpScheduler. url))

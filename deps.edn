@@ -3,6 +3,7 @@
  :deps
  {
   com.taoensso/timbre     {:mvn/version "6.0.4"}
+  com.fzakaria/slf4j-timbre {:mvn/version "0.4.0"}
   http-kit/http-kit       {:mvn/version "2.7.0"}
   ring/ring-json {:mvn/version "0.5.1"}
   org.clojure/core.async  {:mvn/version "1.6.673"}
