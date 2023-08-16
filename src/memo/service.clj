@@ -1,12 +1,11 @@
 (ns memo.service
-  (:require [org.httpkit.server :as hk])
-  (:require [compojure.core :refer :all]
-            [compojure.route :as route])
-  (:require [ring.middleware.params]
-            [ring.middleware.json :refer :all])
-  (:require
-    [taoensso.timbre :refer [trace debug info warn error spy]])
-  (:require [memo.scheduler :as s]))
+  (:require [org.httpkit.server :as hk]
+            [compojure.core :refer :all]
+            [compojure.route :as route]
+            [ring.middleware.params]
+            [ring.middleware.json :refer :all]
+            [taoensso.timbre :refer [trace debug info warn error spy]]
+            [memo.scheduler :as s]))
 
 (defmacro on-term-signal [& handler]
   `(.addShutdownHook (Runtime/getRuntime)
@@ -26,7 +25,7 @@
                   {:body body}))
               (POST "/unschedule" [:as request]
                 (let [body (:body request)]
-                  (debug (s/unschedule  scheduler "3456v345ty345vt5vtcbhdrtt"))
+                  (debug (s/unschedule scheduler "3456v345ty345vt5vtcbhdrtt"))
                   {:body body}))
               (GET "/schedules" [:as request]
                 (let [body (:body request)]
