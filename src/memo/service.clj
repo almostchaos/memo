@@ -16,7 +16,7 @@
 (def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.249"))
 
 (defn -main [& args]
-  (info "Starting service...")
+  (info "starting service...")
   (let [scheduler (memo/run url)
 
         app (routes
@@ -39,9 +39,9 @@
                               ring.middleware.json/wrap-json-response)
                           {:port 8080})]
 
-    (info "Started service.")
+    (info "started service")
     (on-term-signal
-      (info "Stopping service...")
+      (info "stopping service...")
       (shutdown-server)
       (memo/shutdown scheduler)
-      (info "Stopped server."))))
+      (info "stopped server"))))
