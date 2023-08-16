@@ -25,23 +25,23 @@
   (schedules [self]
     (debug "schedules"))
   (shutdown [self]
-    (info "Stopping scheduler...")
+    (info "stopping scheduler...")
     (amqp#core/close connection)
-    (info "Stopped scheduler.")))
+    (info "stopped scheduler")))
 
 (defn message-handler
   [ch {:keys [content-type delivery-tag] :as meta} ^bytes payload]
   (debug
-    (str "Received a message: " (String. payload "UTF-8") ", delivery tag: " delivery-tag ", content type: " content-type)))
+    (str "received a message: " (String. payload "UTF-8") ", delivery tag: " delivery-tag ", content type: " content-type)))
 
 (defn run [url]
-  (info "Starting scheduler...")
-  (debug "Using URL: " url)
+  (info "starting scheduler...")
+  (debug "using URL -> " url)
   (let [connection (amqp#core/connect {:uri url})
         ch (amqp#channel/open connection)
         scheduler (AmqpScheduler. connection ch)]
     (amqp#queue/declare ch queue-name {:exclusive false :auto-delete true})
     (amqp#consumer/subscribe ch queue-name message-handler {:auto-ack true})
 
-    (info "Started scheduler.")
+    (info "started scheduler")
     scheduler))
