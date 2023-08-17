@@ -15,7 +15,7 @@ services:
       driver: "local"
 
   rabbitmq:
-    image: arm64v8/rabbitmq
+    image: rabbitmq:3-management
     ports:
       - "8000:15672"
     logging:
