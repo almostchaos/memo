@@ -46,8 +46,8 @@
         (amqp#basic/publish ch "" queue-name message attributes)
         id)
       (catch Exception e
-        (warn "cannot calculate next date for expression '" cron-exp "'")
-        "")))
+        (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
+        (throw (Exception. "next date is in the past")))))
 
   (unschedule [self id]
     (debug (str "id: " id)))
