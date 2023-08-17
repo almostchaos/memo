@@ -26,7 +26,8 @@
     (debug (str "dest: " dest " cron: " cron " message: " message))
     (let [id (str (random-uuid))
           attributes {:message-id id :content-type "text/plain" :persistent true :expiration "400"}]
-      (amqp#basic/publish ch "" queue-name message attributes)))
+      (amqp#basic/publish ch "" queue-name message attributes)
+      id))
 
   (unschedule [self id]
     (debug (str "id: " id)))

@@ -25,8 +25,8 @@
                       type (get body "type")
                       cron (get body "cron")
                       message (get body "message")
-                      job (memo/schedule scheduler type cron message)]
-                  {:body job}))
+                      schedule-id (memo/schedule scheduler type cron message)]
+                  {:body {:id schedule-id}}))
               (POST "/unschedule" [:as request]
                 (let [body (:body request)
                       id (get body "id")]
