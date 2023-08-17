@@ -3,15 +3,25 @@
   (:require [langohr.core :as amqp#core]
             [langohr.channel :as amqp#channel]
             [langohr.queue :as amqp#queue]
+            [langohr.exchange :as amqp#exchange]
             [langohr.consumers :as amqp#consumer]
             [langohr.basic :as amqp#basic]
             [taoensso.timbre :refer [trace debug info warn error spy]]))
 
 (def queue-name "memo.internal")
+(def expired-queue-name "memo.internal.expired")
+(def expired-exchange-name "memo.internal.expired.exchange")
 (defn- setup-queues [ch]
-  (amqp#queue/declare ch queue-name {:durable true
-                                     :exclusive false
-                                     :auto-delete false}))
+  (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
+  (amqp#exchange/fanout ch expired-exchange-name {:durable true})
+  (amqp#queue/bind ch expired-queue-name expired-exchange-name)
+  (amqp#queue/declare ch queue-name {:durable true :exclusive false :auto-delete false :arguments
+                                     {"x-dead-letter-exchange" expired-exchange-name}})
+  (amqp#consumer/subscribe ch expired-queue-name
+                           (fn [ch meta ^bytes payload]
+                             (spy meta)
+                             (debug
+                               (str "received expired message: " (String. payload "UTF-8")))) {:auto-ack true}))
 
 (defprotocol Scheduler
   (schedule [self dest cron message])
@@ -25,7 +35,7 @@
   (schedule [self dest cron message]
     (debug (str "dest: " dest " cron: " cron " message: " message))
     (let [id (str (random-uuid))
-          attributes {:message-id id :content-type "text/plain" :persistent true :expiration "400"}]
+          attributes {:message-id id :content-type "text/plain" :persistent true :expiration "3000"}]
       (amqp#basic/publish ch "" queue-name message attributes)
       id))
 
@@ -46,9 +56,11 @@
   (debug
     (str "received a message: " (String. payload "UTF-8")))
   (let [delivery-tag (:delivery-tag meta)]
-    (if (< delivery-tag 100)
-      (amqp#basic/reject ch delivery-tag true)
-      (amqp#basic/ack ch delivery-tag))))
+    (future
+      (Thread/sleep 4000)
+      (debug "reject message " (:message-id meta))
+      (amqp#basic/reject ch delivery-tag false))
+    ))
 
 (defn run [url]
   (info "starting scheduler...")
@@ -57,7 +69,7 @@
         ch (amqp#channel/open connection)
         scheduler (AmqpScheduler. connection ch)]
     (setup-queues ch)
-    (amqp#consumer/subscribe ch queue-name message-handler {:auto-ack false})
+    ;(amqp#consumer/subscribe ch queue-name message-handler {:auto-ack false})
 
     (info "started scheduler")
     scheduler))
