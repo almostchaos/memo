@@ -36,13 +36,18 @@
 
   (schedule [self dest cron-exp message]
     (debug (str "dest: " dest " cron-exp: " cron-exp " message: " message))
-    (let [id (str (random-uuid))
-          now (time/now)
-          next-date (first (cron/forward-cron-sequence now cron-exp))
-          ttl (time/in-millis (time/interval now next-date))
-          attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
-      (amqp#basic/publish ch "" queue-name message attributes)
-      id))
+    (try
+      (let [id (str (random-uuid))
+            now (time/now)
+            next-dates (cron/forward-cron-sequence now cron-exp)
+            next-date (first next-dates)
+            ttl (time/in-millis (time/interval now next-date))
+            attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
+        (amqp#basic/publish ch "" queue-name message attributes)
+        id)
+      (catch Exception e
+        (warn "cannot calculate next date for expression '" cron-exp "'")
+        "")))
 
   (unschedule [self id]
     (debug (str "id: " id)))
