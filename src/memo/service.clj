@@ -21,13 +21,17 @@
 
         app (routes
               (POST "/schedule" [:as request]
-                (let [body (:body request)]
-                  (memo/schedule scheduler "webhooks" "2 * 2 * *" "bla")
-                  {:body body}))
+                (let [body (:body request)
+                      type (get body "type")
+                      cron (get body "cron")
+                      message (get body "message")
+                      job (memo/schedule scheduler type cron message)]
+                  {:body job}))
               (POST "/unschedule" [:as request]
-                (let [body (:body request)]
-                  (memo/unschedule scheduler (get body "id"))
-                  {:body body}))
+                (let [body (:body request)
+                      id (get body "id")]
+                  (memo/unschedule scheduler id)
+                  {:body nil}))
               (GET "/schedules" []
                   {:body (memo/schedules scheduler)})
               (route/not-found "unknown endpoint"))
