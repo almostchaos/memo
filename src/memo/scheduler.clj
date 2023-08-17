@@ -6,7 +6,9 @@
             [langohr.exchange :as amqp#exchange]
             [langohr.consumers :as amqp#consumer]
             [langohr.basic :as amqp#basic]
-            [taoensso.timbre :refer [trace debug info warn error spy]]))
+            [taoensso.timbre :refer [trace debug info warn error spy]]
+            [clj-time.core :as time]
+            [chronology.utils :as cron]))
 
 (def queue-name "memo.internal")
 (def expired-queue-name "memo.internal.expired")
@@ -32,10 +34,13 @@
 (deftype AmqpScheduler [connection ch]
   Scheduler
 
-  (schedule [self dest cron message]
-    (debug (str "dest: " dest " cron: " cron " message: " message))
+  (schedule [self dest cron-exp message]
+    (debug (str "dest: " dest " cron-exp: " cron-exp " message: " message))
     (let [id (str (random-uuid))
-          attributes {:message-id id :content-type "text/plain" :persistent true :expiration "3000"}]
+          now (time/now)
+          next-date (first (cron/forward-cron-sequence now cron-exp))
+          ttl (time/in-millis (time/interval now next-date))
+          attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
       (amqp#basic/publish ch "" queue-name message attributes)
       id))
 
