@@ -100,6 +100,7 @@
     (let [connection (amqp#core/connect {:uri url})
           ch (amqp#channel/open connection)
           scheduler (AmqpScheduler. connection ch)]
+      (amqp#core/automatic-recovery-enabled? connection)
       (setup-queues connection)
       (info "started scheduler")
       scheduler)))
