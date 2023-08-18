@@ -65,7 +65,10 @@
         id)
       (catch Exception e
         (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
-        (throw (Exception. (str "next date is in the past for (" cron-exp ")" e))))))
+        (throw (Exception. (str "next date is in the past for (" cron-exp ")" e))))
+      (finally
+        ;fire message to dest exchange/queue
+        )))
 
   (unschedule [self id]
     (debug (str "id: " id))
@@ -95,10 +98,9 @@
   (let [env (System/getenv)
         url (get env "CLOUDAMQP_URL" "amqp://guest:guest@rabbitmq")]
     (debug "connecting to " url)
-    (let [connection (amqp#core/connect {:uri url})
+    (let [connection (amqp#core/connect {:uri url :automatically-recover true})
           ch (amqp#channel/open connection)
           scheduler (AmqpScheduler. connection ch)]
-      (amqp#core/automatic-recovery-enabled? connection)
       (setup-queues connection)
       (info "started scheduler")
       scheduler)))
