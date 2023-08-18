@@ -33,11 +33,10 @@
       (try
         (debug (str "received expired message: " (String. payload "UTF-8")))
         (let [message (json/read-str (String. payload "UTF-8"))
-              id (get meta "message-id")
               cron-exp (get message "cron-exp")
               ttl (ttl-to-next-date cron-exp)
-              attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
-          (debug "re-schedule" id message)
+              attributes {:content-type "text/plain" :persistent true :expiration (str ttl)}]
+          (debug "re-schedule" message)
           (amqp#basic/publish ch "" queue-name payload attributes))
         (catch Exception _
           (debug "next dates are consumed"))))
@@ -58,8 +57,8 @@
     (try
       (let [id (str (random-uuid))
             ttl (ttl-to-next-date cron-exp)
-            payload (json/write-str {:cron-exp cron-exp :message message})
-            attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
+            payload (json/write-str {:id id :cron-exp cron-exp :message message})
+            attributes {:content-type "text/plain" :persistent true :expiration (str ttl)}]
         (amqp#basic/publish ch "" queue-name payload attributes)
         id)
       (catch Exception _
