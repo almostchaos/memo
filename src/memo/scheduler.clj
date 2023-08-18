@@ -1,5 +1,4 @@
 (ns memo.scheduler
-  (:gen-class)
   (:require [langohr.core :as amqp#core]
             [langohr.channel :as amqp#channel]
             [langohr.queue :as amqp#queue]
@@ -38,13 +37,16 @@
               cron-exp (get message "cron-exp")
               ttl (ttl-to-next-date cron-exp)
               attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
+          (debug "re-schedule" id message)
           (amqp#basic/publish ch "" queue-name payload attributes))
         (catch Exception _
-          (debug "next dates are consumed")))) {:auto-ack true}))
+          (debug "next dates are consumed"))))
+    {:auto-ack true}))
 
 (defprotocol Scheduler
   (schedule [self dest cron message])
   (unschedule [self id])
+  (unschedule-all [self])
   (schedules [self])
   (shutdown [self]))
 
@@ -52,7 +54,7 @@
   Scheduler
 
   (schedule [self dest cron-exp message]
-    (debug (str "dest: " dest " cron-exp: " cron-exp " message: " message))
+    (debug (str "schedule events into " dest ", cron-exp: " cron-exp ", message: " message))
     (try
       (let [id (str (random-uuid))
             ttl (ttl-to-next-date cron-exp)
@@ -62,10 +64,28 @@
         id)
       (catch Exception _
         (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
-        (throw (Exception. "next date is in the past")))))
+        (throw (Exception. (str "next date is in the past for (" cron-exp ")"))))))
 
   (unschedule [self id]
-    (debug (str "id: " id)))
+    (debug (str "id: " id))
+    ;(let [consumer-tag (amqp#consumer/subscribe
+    ;                     ch queue-name
+    ;                     (fn [ch meta ^bytes payload]
+    ;                       (let [message-id (get meta "message-id")
+    ;                             requeue? (not= id message-id)
+    ;                             delivery-tag (:delivery-tag meta)]
+    ;                         (spy meta)
+    ;                         (debug "received message" message-id)
+    ;                         (if requeue?
+    ;                           (amqp#basic/reject ch delivery-tag false)
+    ;                           (amqp#basic/ack ch delivery-tag))))
+    ;                     {:auto-ack false})]
+    ;  (debug "consumer-tag" consumer-tag)
+    ;  (amqp#basic/cancel ch consumer-tag))
+    )
+
+  (unschedule-all [self]
+    (amqp#queue/purge ch queue-name))
 
   (schedules [self]
     (debug "schedules")
