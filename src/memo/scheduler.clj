@@ -46,7 +46,6 @@
   (schedule [self dest cron message])
   (unschedule [self id])
   (unschedule-all [self])
-  (schedules [self])
   (shutdown [self]))
 
 (deftype AmqpScheduler [connection ch]
@@ -83,10 +82,6 @@
 
   (unschedule-all [self]
     (amqp#queue/purge ch queue-name))
-
-  (schedules [self]
-    (debug "schedules")
-    [])
 
   (shutdown [self]
     (info "stopping scheduler...")

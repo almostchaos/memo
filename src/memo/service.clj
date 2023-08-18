@@ -25,16 +25,17 @@
                       message (get body "message")
                       schedule-id (memo/schedule scheduler type cron message)]
                   {:body {:id schedule-id}}))
+
               (POST "/unschedule" [:as request]
                 (let [body (:body request)
                       id (get body "id")]
                   (memo/unschedule scheduler id)
                   {:body nil}))
+
               (POST "/unschedule-all" []
                   (memo/unschedule-all scheduler)
                   {:body nil})
-              (GET "/schedules" []
-                {:body (memo/schedules scheduler)})
+
               (route/not-found "unknown endpoint"))
 
         shutdown-server (http/run-server
