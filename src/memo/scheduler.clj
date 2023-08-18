@@ -14,6 +14,9 @@
 (def expired-queue-name "memo.internal.expired")
 (def expired-exchange-name "memo.internal.expired.exchange")
 
+(defn- bytes-to-utf8-string [b]
+      (String. b "UTF-8"))
+
 (defn- ttl-to-next-date [cron-exp]
   (let [now (time/now)
         next-dates (cron/forward-cron-sequence now cron-exp)
@@ -31,11 +34,10 @@
     expired-queue-name
     (fn [ch meta ^bytes payload]
       (try
-        (debug (str "received expired message: " (String. payload "UTF-8")))
-        (let [message (json/read-str (String. payload "UTF-8"))
+        (let [message (json/read-str (bytes-to-utf8-string payload))
               cron-exp (get message "cron-exp")
               ttl (ttl-to-next-date cron-exp)
-              attributes {:content-type "text/plain" :persistent true :expiration (str ttl)}]
+              attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
           (debug "re-schedule" message)
           (amqp#basic/publish ch "" queue-name payload attributes))
         (catch Exception _
@@ -57,7 +59,7 @@
       (let [id (str (random-uuid))
             ttl (ttl-to-next-date cron-exp)
             payload (json/write-str {:id id :cron-exp cron-exp :message message})
-            attributes {:content-type "text/plain" :persistent true :expiration (str ttl)}]
+            attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
         (amqp#basic/publish ch "" queue-name payload attributes)
         id)
       (catch Exception _
