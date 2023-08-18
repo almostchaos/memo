@@ -71,16 +71,14 @@
     (debug (str "id: " id))
     (amqp#consumer/subscribe
       ch queue-name
-      (fn [temp-ch meta ^bytes payload]
+      (fn [ch meta ^bytes payload]
         (let [message (json/read-str (String. payload "UTF-8"))
-              schedule-id (get message "id")
-              match? (= id schedule-id)
-              delivery-tag (:delivery-tag meta)]
+              match? (= id (get message "id"))]
           (if match?
             (do
-              (debug "unschedule" schedule-id)
-              (amqp#basic/ack temp-ch delivery-tag)
-              (amqp#core/close temp-ch)))))
+              (debug "unschedule" id)
+              (amqp#basic/ack ch (:delivery-tag meta))
+              (amqp#core/close ch)))))
       {:auto-ack false}))
 
   (unschedule-all [self]
