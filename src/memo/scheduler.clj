@@ -23,9 +23,8 @@
         next-date (first next-dates)]
     (time/in-millis (time/interval now next-date))))
 
-(defn- setup-queues [url]
-  (let [connection (amqp#core/connect {:uri url})
-        ch (amqp#channel/open connection)]
+(defn- setup-queues [connection]
+  (let [ch (amqp#channel/open connection)]
     (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
     (amqp#exchange/fanout ch expired-exchange-name {:durable true})
     (amqp#queue/bind ch expired-queue-name expired-exchange-name)
@@ -101,6 +100,6 @@
     (let [connection (amqp#core/connect {:uri url})
           ch (amqp#channel/open connection)
           scheduler (AmqpScheduler. connection ch)]
-      (setup-queues url)
+      (setup-queues connection)
       (info "started scheduler")
       scheduler)))
