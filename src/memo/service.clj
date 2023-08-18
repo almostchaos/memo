@@ -13,7 +13,7 @@
                                 (debug "sigterm captured")
                                 ~@handler))))
 
-(def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.142"))
+(def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.131"))
 
 (defn -main [& args]
   (info "starting service...")

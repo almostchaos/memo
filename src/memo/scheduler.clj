@@ -8,22 +8,39 @@
             [langohr.basic :as amqp#basic]
             [taoensso.timbre :refer [trace debug info warn error spy]]
             [clj-time.core :as time]
-            [chronology.utils :as cron]))
+            [chronology.utils :as cron]
+            [clojure.data.json :as json]))
 
 (def queue-name "memo.internal")
 (def expired-queue-name "memo.internal.expired")
 (def expired-exchange-name "memo.internal.expired.exchange")
+
+(defn- ttl-to-next-date [cron-exp]
+  (let [now (time/now)
+        next-dates (cron/forward-cron-sequence now cron-exp)
+        next-date (first next-dates)]
+    (time/in-millis (time/interval now next-date))))
+
 (defn- setup-queues [ch]
   (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
   (amqp#exchange/fanout ch expired-exchange-name {:durable true})
   (amqp#queue/bind ch expired-queue-name expired-exchange-name)
   (amqp#queue/declare ch queue-name {:durable true :exclusive false :auto-delete false :arguments
                                      {"x-dead-letter-exchange" expired-exchange-name}})
-  (amqp#consumer/subscribe ch expired-queue-name
-                           (fn [ch meta ^bytes payload]
-                             (spy meta)
-                             (debug
-                               (str "received expired message: " (String. payload "UTF-8")))) {:auto-ack true}))
+  (amqp#consumer/subscribe
+    ch
+    expired-queue-name
+    (fn [ch meta ^bytes payload]
+      (try
+        (debug (str "received expired message: " (String. payload "UTF-8")))
+        (let [message (json/read-str (String. payload "UTF-8"))
+              id (get meta "message-id")
+              cron-exp (get message "cron-exp")
+              ttl (ttl-to-next-date cron-exp)
+              attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
+          (amqp#basic/publish ch "" queue-name payload attributes))
+        (catch Exception e
+          (debug "next dates are consumed")))) {:auto-ack true}))
 
 (defprotocol Scheduler
   (schedule [self dest cron message])
@@ -38,12 +55,10 @@
     (debug (str "dest: " dest " cron-exp: " cron-exp " message: " message))
     (try
       (let [id (str (random-uuid))
-            now (time/now)
-            next-dates (cron/forward-cron-sequence now cron-exp)
-            next-date (first next-dates)
-            ttl (time/in-millis (time/interval now next-date))
+            ttl (ttl-to-next-date cron-exp)
+            payload (json/write-str {:cron-exp cron-exp :message message})
             attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
-        (amqp#basic/publish ch "" queue-name message attributes)
+        (amqp#basic/publish ch "" queue-name payload attributes)
         id)
       (catch Exception e
         (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
