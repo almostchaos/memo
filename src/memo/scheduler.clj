@@ -42,7 +42,10 @@
             (debug "re-schedule" message)
             (amqp#basic/publish ch "" queue-name payload attributes))
           (catch Exception _
-            (debug "next dates are consumed"))))
+            (debug "next dates are consumed"))
+          (finally
+            ;todo: fire message to dest exchange/queue
+            )))
       {:auto-ack true})))
 
 (defprotocol Scheduler
@@ -65,10 +68,7 @@
         id)
       (catch Exception e
         (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
-        (throw (Exception. (str "next date is in the past for (" cron-exp ")" e))))
-      (finally
-        ;fire message to dest exchange/queue
-        )))
+        (throw (Exception. (str "next date is in the past for (" cron-exp ")" e))))))
 
   (unschedule [self id]
     (debug (str "id: " id))
