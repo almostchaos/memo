@@ -72,17 +72,18 @@
 
   (unschedule [self id]
     (debug (str "id: " id))
-    (amqp#consumer/subscribe
-      ch queue-name
-      (fn [ch meta ^bytes payload]
-        (let [message (json/read-str (String. payload "UTF-8"))
-              match? (= id (get message "id"))]
-          (if match?
-            (do
-              (debug "unschedule" id)
-              (amqp#basic/ack ch (:delivery-tag meta))
-              (amqp#core/close ch)))))
-      {:auto-ack false}))
+    (let [temp-ch (amqp#channel/open connection)]
+      (amqp#consumer/subscribe
+        temp-ch queue-name
+        (fn [ch meta ^bytes payload]
+          (let [message (json/read-str (String. payload "UTF-8"))
+                match? (= id (get message "id"))]
+            (if match?
+              (do
+                (debug "unschedule" id)
+                (amqp#basic/ack ch (:delivery-tag meta))
+                (amqp#core/close ch)))))
+        {:auto-ack false})))
 
   (unschedule-all [self]
     (amqp#queue/purge ch queue-name))
@@ -98,7 +99,7 @@
   (let [env (System/getenv)
         url (get env "CLOUDAMQP_URL" "amqp://guest:guest@rabbitmq")]
     (debug "connecting to " url)
-    (let [connection (amqp#core/connect {:uri url :automatically-recover true})
+    (let [connection (amqp#core/connect {:uri url})
           ch (amqp#channel/open connection)
           scheduler (AmqpScheduler. connection ch)]
       (setup-queues connection)
