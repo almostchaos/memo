@@ -67,21 +67,19 @@
 
   (unschedule [self id]
     (debug (str "id: " id))
-    ;(let [consumer-tag (amqp#consumer/subscribe
-    ;                     ch queue-name
-    ;                     (fn [ch meta ^bytes payload]
-    ;                       (let [message-id (get meta "message-id")
-    ;                             requeue? (not= id message-id)
-    ;                             delivery-tag (:delivery-tag meta)]
-    ;                         (spy meta)
-    ;                         (debug "received message" message-id)
-    ;                         (if requeue?
-    ;                           (amqp#basic/reject ch delivery-tag false)
-    ;                           (amqp#basic/ack ch delivery-tag))))
-    ;                     {:auto-ack false})]
-    ;  (debug "consumer-tag" consumer-tag)
-    ;  (amqp#basic/cancel ch consumer-tag))
-    )
+    (amqp#consumer/subscribe
+      ch queue-name
+      (fn [ch meta ^bytes payload]
+        (let [message (json/read-str (String. payload "UTF-8"))
+              schedule-id (get message "id")
+              match? (= id schedule-id)
+              delivery-tag (:delivery-tag meta)]
+          (if match?
+            (do
+              (debug "unschedule" schedule-id)
+              (amqp#basic/ack ch delivery-tag)
+              (amqp#core/close ch)))))
+      {:auto-ack false}))
 
   (unschedule-all [self]
     (amqp#queue/purge ch queue-name))
@@ -94,17 +92,6 @@
     (info "stopping scheduler...")
     (amqp#core/close connection)
     (info "stopped scheduler")))
-
-(defn message-handler [ch meta ^bytes payload]
-  (spy meta)
-  (debug
-    (str "received a message: " (String. payload "UTF-8")))
-  (let [delivery-tag (:delivery-tag meta)]
-    (future
-      (Thread/sleep 4000)
-      (debug "reject message " (:message-id meta))
-      (amqp#basic/reject ch delivery-tag false))
-    ))
 
 (defn run []
   (info "starting scheduler...")
