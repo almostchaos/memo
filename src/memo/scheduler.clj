@@ -39,7 +39,7 @@
               ttl (ttl-to-next-date cron-exp)
               attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
           (amqp#basic/publish ch "" queue-name payload attributes))
-        (catch Exception e
+        (catch Exception _
           (debug "next dates are consumed")))) {:auto-ack true}))
 
 (defprotocol Scheduler
@@ -60,7 +60,7 @@
             attributes {:message-id id :content-type "text/plain" :persistent true :expiration (str ttl)}]
         (amqp#basic/publish ch "" queue-name payload attributes)
         id)
-      (catch Exception e
+      (catch Exception _
         (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
         (throw (Exception. "next date is in the past")))))
 
@@ -87,14 +87,15 @@
       (amqp#basic/reject ch delivery-tag false))
     ))
 
-(defn run [url]
+(defn run []
   (info "starting scheduler...")
-  (debug "using URL -> " url)
-  (let [connection (amqp#core/connect {:uri url})
-        ch (amqp#channel/open connection)
-        scheduler (AmqpScheduler. connection ch)]
-    (setup-queues ch)
-    ;(amqp#consumer/subscribe ch queue-name message-handler {:auto-ack false})
 
-    (info "started scheduler")
-    scheduler))
+  (let [env (System/getenv)
+        url (get env "CLOUDAMQP_URL" "amqp://guest:guest@rabbitmq")]
+    (debug "connecting to " url)
+    (let [connection (amqp#core/connect {:uri url})
+          ch (amqp#channel/open connection)
+          scheduler (AmqpScheduler. connection ch)]
+      (setup-queues ch)
+      (info "started scheduler")
+      scheduler)))

@@ -13,11 +13,9 @@
                                 (debug "sigterm captured")
                                 ~@handler))))
 
-(def url (get (System/getenv) "CLOUDAMQP_URL" "amqp://guest:guest@192.168.0.131"))
-
 (defn -main [& args]
   (info "starting service...")
-  (let [scheduler (memo/run url)
+  (let [scheduler (memo/run)
 
         app (routes
               (POST "/schedule" [:as request]
