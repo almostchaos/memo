@@ -15,7 +15,7 @@
 (def expired-exchange-name "memo.internal.expired.exchange")
 
 (defn- bytes-to-utf8-string [b]
-      (String. b "UTF-8"))
+  (String. b "UTF-8"))
 
 (defn- ttl-to-next-date [cron-exp]
   (let [now (time/now)
@@ -23,26 +23,28 @@
         next-date (first next-dates)]
     (time/in-millis (time/interval now next-date))))
 
-(defn- setup-queues [ch]
-  (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
-  (amqp#exchange/fanout ch expired-exchange-name {:durable true})
-  (amqp#queue/bind ch expired-queue-name expired-exchange-name)
-  (amqp#queue/declare ch queue-name {:durable true :exclusive false :auto-delete false :arguments
-                                     {"x-dead-letter-exchange" expired-exchange-name}})
-  (amqp#consumer/subscribe
-    ch
-    expired-queue-name
-    (fn [ch meta ^bytes payload]
-      (try
-        (let [message (json/read-str (bytes-to-utf8-string payload))
-              cron-exp (get message "cron-exp")
-              ttl (ttl-to-next-date cron-exp)
-              attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-          (debug "re-schedule" message)
-          (amqp#basic/publish ch "" queue-name payload attributes))
-        (catch Exception _
-          (debug "next dates are consumed"))))
-    {:auto-ack true}))
+(defn- setup-queues [url]
+  (let [connection (amqp#core/connect {:uri url})
+        ch (amqp#channel/open connection)]
+    (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
+    (amqp#exchange/fanout ch expired-exchange-name {:durable true})
+    (amqp#queue/bind ch expired-queue-name expired-exchange-name)
+    (amqp#queue/declare ch queue-name {:durable true :exclusive false :auto-delete false :arguments
+                                       {"x-dead-letter-exchange" expired-exchange-name}})
+    (amqp#consumer/subscribe
+      ch
+      expired-queue-name
+      (fn [ch meta ^bytes payload]
+        (try
+          (let [message (json/read-str (bytes-to-utf8-string payload))
+                cron-exp (get message "cron-exp")
+                ttl (ttl-to-next-date cron-exp)
+                attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
+            (debug "re-schedule" message)
+            (amqp#basic/publish ch "" queue-name payload attributes))
+          (catch Exception _
+            (debug "next dates are consumed"))))
+      {:auto-ack true})))
 
 (defprotocol Scheduler
   (schedule [self dest cron message])
@@ -62,15 +64,15 @@
             attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
         (amqp#basic/publish ch "" queue-name payload attributes)
         id)
-      (catch Exception _
+      (catch Exception e
         (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
-        (throw (Exception. (str "next date is in the past for (" cron-exp ")"))))))
+        (throw (Exception. (str "next date is in the past for (" cron-exp ")" e))))))
 
   (unschedule [self id]
     (debug (str "id: " id))
     (amqp#consumer/subscribe
       ch queue-name
-      (fn [ch meta ^bytes payload]
+      (fn [temp-ch meta ^bytes payload]
         (let [message (json/read-str (String. payload "UTF-8"))
               schedule-id (get message "id")
               match? (= id schedule-id)
@@ -78,8 +80,8 @@
           (if match?
             (do
               (debug "unschedule" schedule-id)
-              (amqp#basic/ack ch delivery-tag)
-              (amqp#core/close ch)))))
+              (amqp#basic/ack temp-ch delivery-tag)
+              (amqp#core/close temp-ch)))))
       {:auto-ack false}))
 
   (unschedule-all [self]
@@ -99,6 +101,6 @@
     (let [connection (amqp#core/connect {:uri url})
           ch (amqp#channel/open connection)
           scheduler (AmqpScheduler. connection ch)]
-      (setup-queues ch)
+      (setup-queues url)
       (info "started scheduler")
       scheduler)))
