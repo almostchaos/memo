@@ -17,11 +17,20 @@
 (defn- bytes-to-utf8-string [b]
   (String. b "UTF-8"))
 
-(defn- ttl-to-next-date [cron-exp]
-  (let [now (time/now)
-        next-dates (cron/forward-cron-sequence now cron-exp)
-        next-date (first next-dates)]
-    (time/in-millis (time/interval now next-date))))
+(defn- next-date? [cron-exp]
+  (try
+    (first (cron/forward-cron-sequence (time/now) cron-exp))
+    true
+    (catch Exception e
+      false)))
+
+(defn- trigger-now? [cron-exp]
+  (try
+    (let [now (time/now)
+          ref-time (time/minus now (time/minutes 1))
+          trigger-time (first (cron/forward-cron-sequence ref-time cron-exp))]
+      (time/within? (time/interval ref-time now) trigger-time))
+    (catch Exception e false)))
 
 (defn- setup-queues [connection]
   (let [ch (amqp#channel/open connection)]
@@ -34,18 +43,16 @@
       ch
       expired-queue-name
       (fn [ch meta ^bytes payload]
-        (try
-          (let [message (json/read-str (bytes-to-utf8-string payload))
-                cron-exp (get message "cron-exp")
-                ttl (ttl-to-next-date cron-exp)
-                attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-            (debug "re-schedule" message)
-            (amqp#basic/publish ch "" queue-name payload attributes))
-          (catch Exception _
-            (debug "next dates are consumed"))
-          (finally
-            ;todo: fire message to dest exchange/queue
-            )))
+        (let [message (json/read-str (bytes-to-utf8-string payload))
+              cron-exp (get message "cron-exp")
+              ttl (* 60 1000)
+              attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
+          (if (next-date? cron-exp)
+            (do
+              (amqp#basic/publish ch "" queue-name payload attributes)))
+          (if (trigger-now? cron-exp)
+            (do
+              (info "fire schedule" message)))))
       {:auto-ack true})))
 
 (defprotocol Scheduler
@@ -59,16 +66,12 @@
 
   (schedule [self dest cron-exp message]
     (debug (str "schedule events into " dest ", cron-exp: " cron-exp ", message: " message))
-    (try
-      (let [id (str (random-uuid))
-            ttl (ttl-to-next-date cron-exp)
-            payload (json/write-str {:id id :cron-exp cron-exp :message message})
-            attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-        (amqp#basic/publish ch "" queue-name payload attributes)
-        id)
-      (catch Exception e
-        (warn "cannot calculate next date for expression -> " (cron/explain-cron cron-exp) "(" cron-exp ")")
-        (throw (Exception. (str "next date is in the past for (" cron-exp ")" e))))))
+    (let [id (str (random-uuid))
+          ttl (* 60 1000)
+          payload (json/write-str {:id id :cron-exp cron-exp :message message})
+          attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
+      (amqp#basic/publish ch "" queue-name payload attributes)
+      id))
 
   (unschedule [self id]
     (debug (str "id: " id))
