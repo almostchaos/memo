@@ -45,6 +45,7 @@
       (fn [ch meta ^bytes payload]
         (let [message (json/read-str (bytes-to-utf8-string payload))
               cron-exp (get message "cron-exp")
+              ;todo: avoid trigger drifting by anchoring the TTL calculation to the beginning of the minute
               ttl (* 60 1000)
               attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
           (if (next-date? cron-exp)
