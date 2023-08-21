@@ -17,7 +17,7 @@
 (defn- bytes-to-utf8-string [b]
   (String. b "UTF-8"))
 
-(defn- next-date? [cron-exp]
+(defn- trigger-next? [cron-exp]
   (try
     (first (cron/forward-cron-sequence (time/now) cron-exp))
     true
@@ -32,24 +32,28 @@
       (time/within? (time/interval ref-time now) trigger-time))
     (catch Exception e false)))
 
+(defn- ttl-to-next-minute []
+  (let [now (time/now)
+        time-in-a-minute (time/plus now (time/minutes 1))
+        beginning-of-next-minute (time/floor time-in-a-minute time/minute)]
+    (time/in-millis (time/interval now beginning-of-next-minute))))
+
 (defn- setup-queues [connection]
   (let [ch (amqp#channel/open connection)]
     (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
     (amqp#exchange/fanout ch expired-exchange-name {:durable true})
     (amqp#queue/bind ch expired-queue-name expired-exchange-name)
-    (amqp#queue/declare ch queue-name {:durable true :exclusive false :auto-delete false :arguments
-                                       {"x-dead-letter-exchange" expired-exchange-name}})
+    (amqp#queue/declare ch queue-name {:durable   true :exclusive false :auto-delete false
+                                       :arguments {"x-dead-letter-exchange" expired-exchange-name}})
     (amqp#consumer/subscribe
       ch
       expired-queue-name
       (fn [ch meta ^bytes payload]
         (let [message (json/read-str (bytes-to-utf8-string payload))
-              cron-exp (get message "cron-exp")
-              ;todo: avoid trigger drifting by anchoring the TTL calculation to the beginning of the minute
-              ttl (* 60 1000)
-              attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-          (if (next-date? cron-exp)
-            (do
+              cron-exp (get message "cron-exp")]
+          (if (trigger-next? cron-exp)
+            (let [ttl (ttl-to-next-minute)
+                  attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
               (amqp#basic/publish ch "" queue-name payload attributes)))
           (if (trigger-now? cron-exp)
             (do
