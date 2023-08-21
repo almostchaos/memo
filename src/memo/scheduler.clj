@@ -17,6 +17,8 @@
 (defn- bytes-to-utf8-string [b]
   (String. b "UTF-8"))
 
+(def poll-resolution (time/minutes 1))
+
 (defn- trigger-next? [cron-exp]
   (try
     (first (cron/forward-cron-sequence (time/now) cron-exp))
@@ -27,16 +29,16 @@
 (defn- trigger-now? [cron-exp]
   (try
     (let [now (time/now)
-          ref-time (time/minus now (time/minutes 1))
+          ref-time (time/minus now poll-resolution)
           trigger-time (first (cron/forward-cron-sequence ref-time cron-exp))]
       (time/within? (time/interval ref-time now) trigger-time))
     (catch Exception e false)))
 
-(defn- ttl-to-next-minute []
+(defn- ttl-to-next-poll []
   (let [now (time/now)
-        time-in-a-minute (time/plus now (time/minutes 1))
-        beginning-of-next-minute (time/floor time-in-a-minute time/minute)]
-    (time/in-millis (time/interval now beginning-of-next-minute))))
+        time-after-one-tick (time/plus now poll-resolution)
+        next-tick (time/floor time-after-one-tick time/minute)]
+    (time/in-millis (time/interval now next-tick))))
 
 (defn- setup-queues [connection]
   (let [ch (amqp#channel/open connection)]
@@ -52,7 +54,7 @@
         (let [message (json/read-str (bytes-to-utf8-string payload))
               cron-exp (get message "cron-exp")]
           (if (trigger-next? cron-exp)
-            (let [ttl (ttl-to-next-minute)
+            (let [ttl (ttl-to-next-poll)
                   attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
               (amqp#basic/publish ch "" queue-name payload attributes)))
           (if (trigger-now? cron-exp)
@@ -72,7 +74,7 @@
   (schedule [self dest cron-exp message]
     (debug (str "schedule events into " dest ", cron-exp: " cron-exp ", message: " message))
     (let [id (str (random-uuid))
-          ttl (* 60 1000)
+          ttl (time/in-millis poll-resolution)
           payload (json/write-str {:id id :cron-exp cron-exp :message message})
           attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
       (amqp#basic/publish ch "" queue-name payload attributes)
