@@ -36,9 +36,10 @@
 
 (defn- ttl-to-next-poll []
   (let [now (time/now)
-        time-after-one-tick (time/plus now poll-resolution)
-        next-tick (time/floor time-after-one-tick time/minute)]
-    (time/in-millis (time/interval now next-tick))))
+        next-poll-exact-time (time/plus now poll-resolution)
+        spread (time/millis (rand-int 10000))
+        next-poll-time (time/plus (time/floor next-poll-exact-time time/minute) spread)]
+    (time/in-millis (time/interval now next-poll-time))))
 
 (defn- setup-queues [connection]
   (let [ch (amqp#channel/open connection)]
