@@ -53,14 +53,16 @@
       expired-queue-name
       (fn [ch meta ^bytes payload]
         (let [message (json/read-str (bytes-to-utf8-string payload))
-              cron-exp (get message "cron-exp")]
+              cron-exp (get message "cron")]
           (if (trigger-next? cron-exp)
             (let [ttl (ttl-to-next-poll)
                   attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
               (amqp#basic/publish ch "" queue-name payload attributes)))
           (if (trigger-now? cron-exp)
-            (do
-              (info "fire schedule" message)))))
+            (let [type (get message "type")
+                  msg (get message "message")]
+              (info "fire schedule, send message" (str "'" msg "'") "to" type)
+              (amqp#basic/publish ch "" type msg {:content-type "text/plain"})))))
       {:auto-ack true})))
 
 (defprotocol Scheduler
@@ -73,10 +75,10 @@
   Scheduler
 
   (schedule [self dest cron-exp message]
-    (debug (str "schedule events into " dest ", cron-exp: " cron-exp ", message: " message))
+    (debug (str "schedule events into " dest ", cron: " cron-exp ", message: " message))
     (let [id (str (random-uuid))
           ttl (time/in-millis poll-resolution)
-          payload (json/write-str {:id id :cron-exp cron-exp :message message})
+          payload (json/write-str {:id id :type dest :cron cron-exp :message message})
           attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
       (amqp#basic/publish ch "" queue-name payload attributes)
       id))
