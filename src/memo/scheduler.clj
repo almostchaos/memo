@@ -41,7 +41,7 @@
         next-poll-time (time/plus (time/floor next-poll-exact-time time/minute) spread)]
     (time/in-millis (time/interval now next-poll-time))))
 
-(defn- setup-queues [connection]
+(defn- setup-queues [connection target-exchange]
   (let [ch (amqp#channel/open connection)]
     (amqp#queue/declare ch expired-queue-name {:durable true
                                                :exclusive false
@@ -68,7 +68,7 @@
             (let [type (get message "type")
                   msg (get message "message")]
               (info "fire schedule, send message" (str "'" msg "'") "to" type)
-              (amqp#basic/publish ch "" type msg {:content-type "text/plain"})))))
+              (amqp#basic/publish ch target-exchange type msg {:content-type "text/plain"})))))
       {:auto-ack true})))
 
 (defprotocol Scheduler
@@ -116,11 +116,12 @@
   (info "starting scheduler...")
 
   (let [env (System/getenv)
-        url (get env "CLOUDAMQP_URL" "amqp://guest:guest@rabbitmq")]
+        url (get env "CLOUDAMQP_URL" "amqp://guest:guest@rabbitmq")
+        target-exchange (get env "TARGET_EXCHANGE" "")]
     (debug "connecting to " url)
     (let [connection (amqp#core/connect {:uri url})
           ch (amqp#channel/open connection)
           scheduler (AmqpScheduler. connection ch)]
-      (setup-queues connection)
+      (setup-queues connection target-exchange)
       (info "started scheduler")
       scheduler)))
