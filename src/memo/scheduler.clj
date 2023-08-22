@@ -43,11 +43,17 @@
 
 (defn- setup-queues [connection]
   (let [ch (amqp#channel/open connection)]
-    (amqp#queue/declare ch expired-queue-name {:durable true :exclusive false :auto-delete false})
+    (amqp#queue/declare ch expired-queue-name {:durable true
+                                               :exclusive false
+                                               :auto-delete false
+                                               :arguments   {"x-queue-type" "quorum"}})
     (amqp#exchange/fanout ch expired-exchange-name {:durable true})
     (amqp#queue/bind ch expired-queue-name expired-exchange-name)
-    (amqp#queue/declare ch queue-name {:durable   true :exclusive false :auto-delete false
-                                       :arguments {"x-dead-letter-exchange" expired-exchange-name}})
+    (amqp#queue/declare ch queue-name {:durable     true
+                                       :exclusive   false
+                                       :auto-delete false
+                                       :arguments   {"x-queue-type" "quorum"
+                                                     "x-dead-letter-exchange" expired-exchange-name}})
     (amqp#consumer/subscribe
       ch
       expired-queue-name
@@ -62,7 +68,7 @@
             (let [type (get message "type")
                   msg (get message "message")]
               (info "fire schedule, send message" (str "'" msg "'") "to" type)
-              (amqp#basic/publish ch "" type msg {:content-type "text/plain"})))))
+              (amqp#basic/publish ch "" type msg {:content-type "text/plain" :expiration "120000"})))))
       {:auto-ack true})))
 
 (defprotocol Scheduler
