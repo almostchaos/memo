@@ -7,8 +7,12 @@ services:
     command: [ "clojure", "-M", "-m", "memo.service" ]
     ports:
       - "8080:8080"
+#expose debugger port
+#      - "5005:5005"
     environment:
       - CLOUDAMQP_URL=amqp://guest:guest@rabbitmq
+#use JVM debugger
+#      - JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,address=0.0.0.0:5005,suspend=n,server=y
     depends_on:
       - rabbitmq
     logging:
