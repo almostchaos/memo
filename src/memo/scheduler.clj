@@ -68,7 +68,7 @@
             (let [type (get message "type")
                   msg (get message "message")]
               (info "fire schedule, send message" (str "'" msg "'") "to" type)
-              (amqp#basic/publish ch "" type msg {:content-type "text/plain" :expiration "120000"})))))
+              (amqp#basic/publish ch "" type msg {:content-type "text/plain"})))))
       {:auto-ack true})))
 
 (defprotocol Scheduler
