@@ -43,8 +43,8 @@
 
 (defn- setup-queues [connection target-exchange]
   (let [ch (amqp#channel/open connection)]
-    (amqp#queue/declare ch expired-queue-name {:durable true
-                                               :exclusive false
+    (amqp#queue/declare ch expired-queue-name {:durable     true
+                                               :exclusive   false
                                                :auto-delete false
                                                :arguments   {"x-queue-type" "quorum"}})
     (amqp#exchange/fanout ch expired-exchange-name {:durable true})
@@ -52,7 +52,7 @@
     (amqp#queue/declare ch queue-name {:durable     true
                                        :exclusive   false
                                        :auto-delete false
-                                       :arguments   {"x-queue-type" "quorum"
+                                       :arguments   {"x-queue-type"           "quorum"
                                                      "x-dead-letter-exchange" expired-exchange-name}})
     (amqp#consumer/subscribe
       ch
@@ -98,9 +98,9 @@
           (let [message (json/read-str (String. payload "UTF-8"))
                 match? (= id (get message "id"))]
             (if match?
-              (do
-                (debug "unschedule" id)
-                (amqp#basic/ack ch (:delivery-tag meta))
+              (let [delivery-tag (:delivery-tag meta)]
+                (debug "unschedule" id "delivery-tag" delivery-tag)
+                (amqp#basic/ack ch delivery-tag)
                 (amqp#core/close ch)))))
         {:auto-ack false})))
 
