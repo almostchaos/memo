@@ -96,12 +96,16 @@
         temp-ch queue-name
         (fn [ch meta ^bytes payload]
           (let [message (json/read-str (String. payload "UTF-8"))
+                delivery-tag (:delivery-tag meta)
                 match? (= id (get message "id"))]
             (if match?
-              (let [delivery-tag (:delivery-tag meta)]
+              (do
                 (debug "unschedule" id "delivery-tag" delivery-tag)
                 (amqp#basic/ack ch delivery-tag)
-                (amqp#core/close ch)))))
+                (Thread/sleep 200)
+                (amqp#core/close ch))
+              (if (amqp#channel/open? ch)
+                (amqp#basic/reject ch delivery-tag true)))))
         {:auto-ack false})))
 
   (unschedule-all [self]
