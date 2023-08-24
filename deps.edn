@@ -12,6 +12,6 @@
   org.clojure/data.json   {:mvn/version "2.3.1"}
   joda-time/joda-time {:mvn/version "2.12.5"}
   com.vodori/chronology {:mvn/version "0.1.2"}
-  }
+  mircea-toma/yasos {:git/url "https://github.com/mircea-toma/yasos" :tag "0.1" :sha "593d806"}}
  :aliases {}
  }

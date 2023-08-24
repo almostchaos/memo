@@ -8,7 +8,8 @@
             [taoensso.timbre :refer [trace debug info warn error spy]]
             [clj-time.core :as time]
             [chronology.utils :as cron]
-            [clojure.data.json :as json]))
+            [clojure.data.json :as json]
+            [yasos.object :refer :all]))
 
 (def queue-name "memo.internal")
 (def expired-queue-name "memo.internal.expired")
@@ -71,61 +72,59 @@
               (amqp#basic/publish ch target-exchange type msg {:content-type "text/plain"})))))
       {:auto-ack true})))
 
-(defprotocol Scheduler
-  (schedule [self dest cron message])
-  (unschedule [self id])
-  (unschedule-all [self])
-  (shutdown [self]))
+(operator schedule)
+(operator unschedule)
+(operator unschedule-all)
+(operator shutdown)
 
-(deftype AmqpScheduler [connection ch]
-  Scheduler
+(defn amqp-scheduler [url target-exchange]
+  (debug "connecting to " url)
+  (let [connection (amqp#core/connect {:uri url})
+        ch (amqp#channel/open connection)]
 
-  (schedule [self dest cron-exp message]
-    (debug (str "schedule events into " dest ", cron: " cron-exp ", message: " message))
-    (let [id (str (random-uuid))
-          ttl (time/in-millis poll-resolution)
-          payload (json/write-str {:id id :type dest :cron cron-exp :message message})
-          attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-      (amqp#basic/publish ch "" queue-name payload attributes)
-      id))
+    (debug "starting schedule ... " url)
+    (setup-queues connection target-exchange)
+    (info "started scheduler")
 
-  (unschedule [self id]
-    (debug (str "id: " id))
-    (let [temp-ch (amqp#channel/open connection)]
-      (amqp#consumer/subscribe
-        temp-ch queue-name
-        (fn [ch meta ^bytes payload]
-          (let [message (json/read-str (String. payload "UTF-8"))
-                delivery-tag (:delivery-tag meta)
-                match? (= id (get message "id"))]
-            (if match?
-              (do
-                (debug "unschedule" id "delivery-tag" delivery-tag)
-                (amqp#basic/ack ch delivery-tag)
-                (Thread/sleep 200)
-                (amqp#core/close ch))
-              (if (amqp#channel/open? ch)
-                (amqp#basic/reject ch delivery-tag true)))))
-        {:auto-ack false})))
+    (object
+      (method schedule [dest cron-exp message]
+        (debug (str "schedule events into " dest ", cron: " cron-exp ", message: " message))
+        (let [id (str (random-uuid))
+              ttl (time/in-millis poll-resolution)
+              payload (json/write-str {:id id :type dest :cron cron-exp :message message})
+              attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
+          (amqp#basic/publish ch "" queue-name payload attributes)
+          id))
 
-  (unschedule-all [self]
-    (amqp#queue/purge ch queue-name))
+      (method unschedule [id]
+        (debug (str "id: " id))
+        (let [temp-ch (amqp#channel/open connection)]
+          (amqp#consumer/subscribe
+            temp-ch queue-name
+            (fn [ch meta ^bytes payload]
+              (let [message (json/read-str (String. payload "UTF-8"))
+                    delivery-tag (:delivery-tag meta)
+                    match? (= id (get message "id"))]
+                (if match?
+                  (do
+                    (debug "unschedule" id "delivery-tag" delivery-tag)
+                    (amqp#basic/ack ch delivery-tag)
+                    (Thread/sleep 200)
+                    (amqp#core/close ch))
+                  (if (amqp#channel/open? ch)
+                    (amqp#basic/reject ch delivery-tag true)))))
+            {:auto-ack false})))
 
-  (shutdown [self]
-    (info "stopping scheduler...")
-    (amqp#core/close connection)
-    (info "stopped scheduler")))
+      (method unschedule-all []
+        (amqp#queue/purge ch queue-name))
+
+      (method shutdown []
+        (info "stopping scheduler...")
+        (amqp#core/close connection)
+        (info "stopped scheduler")))))
 
 (defn run []
-  (info "starting scheduler...")
-
   (let [env (System/getenv)
         url (get env "CLOUDAMQP_URL" "amqp://guest:guest@rabbitmq")
         target-exchange (get env "TARGET_EXCHANGE" "")]
-    (debug "connecting to " url)
-    (let [connection (amqp#core/connect {:uri url})
-          ch (amqp#channel/open connection)
-          scheduler (AmqpScheduler. connection ch)]
-      (setup-queues connection target-exchange)
-      (info "started scheduler")
-      scheduler)))
+    (amqp-scheduler url target-exchange)))
