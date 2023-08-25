@@ -116,6 +116,7 @@
             {:auto-ack false})))
 
       (method unschedule-all []
+        (amqp#queue/purge ch expired-queue-name)
         (amqp#queue/purge ch queue-name))
 
       (method shutdown []
