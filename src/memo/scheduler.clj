@@ -112,8 +112,11 @@
             {:auto-ack false})))
 
       (method unschedule-all []
-        (amqp#queue/purge ch expired-queue-name)
-        (amqp#queue/purge ch queue-name))
+        (future
+          (while (or (not (amqp#queue/empty? ch queue-name)) (not (amqp#queue/empty? ch queue-name)))
+            (amqp#queue/purge ch expired-queue-name)
+            (amqp#queue/purge ch queue-name)
+            (Thread/sleep 1000))))
 
       (method shutdown []
         (info "stopping scheduler...")
