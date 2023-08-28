@@ -42,35 +42,18 @@
         next-poll-time (time/plus (time/floor next-poll-exact-time time/minute) spread)]
     (time/in-millis (time/interval now next-poll-time))))
 
-(defn- setup-queues [connection target-exchange]
-  (let [ch (amqp#channel/open connection)]
-    (amqp#queue/declare ch expired-queue-name {:durable     true
-                                               :exclusive   false
-                                               :auto-delete false
-                                               :arguments   {"x-queue-type" "quorum"}})
-    (amqp#exchange/fanout ch expired-exchange-name {:durable true})
-    (amqp#queue/bind ch expired-queue-name expired-exchange-name)
-    (amqp#queue/declare ch queue-name {:durable     true
-                                       :exclusive   false
-                                       :auto-delete false
-                                       :arguments   {"x-queue-type"           "quorum"
-                                                     "x-dead-letter-exchange" expired-exchange-name}})
-    (amqp#consumer/subscribe
-      ch
-      expired-queue-name
-      (fn [ch meta ^bytes payload]
-        (let [message (json/read-str (bytes-to-utf8-string payload))
-              cron-exp (get message "cron")]
-          (if (trigger-next? cron-exp)
-            (let [ttl (ttl-to-next-poll)
-                  attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-              (amqp#basic/publish ch "" queue-name payload attributes)))
-          (if (trigger-now? cron-exp)
-            (let [type (get message "type")
-                  msg (get message "message")]
-              (info "fire schedule, send message" (str "'" msg "'") "to" type)
-              (amqp#basic/publish ch target-exchange type msg {:content-type "text/plain"})))))
-      {:auto-ack true})))
+(defn- setup-queues [ch]
+  (amqp#queue/declare ch expired-queue-name {:durable     true
+                                             :exclusive   false
+                                             :auto-delete false
+                                             :arguments   {"x-queue-type" "quorum"}})
+  (amqp#exchange/fanout ch expired-exchange-name {:durable true})
+  (amqp#queue/bind ch expired-queue-name expired-exchange-name)
+  (amqp#queue/declare ch queue-name {:durable     true
+                                     :exclusive   false
+                                     :auto-delete false
+                                     :arguments   {"x-queue-type"           "quorum"
+                                                   "x-dead-letter-exchange" expired-exchange-name}}))
 
 (operator schedule)
 (operator unschedule)
@@ -80,10 +63,23 @@
 (defn amqp-scheduler [url target-exchange]
   (debug "connecting to " url)
   (let [connection (amqp#core/connect {:uri url})
-        ch (amqp#channel/open connection)]
+        ch (amqp#channel/open connection)
+        listener (fn [ch meta ^bytes payload]
+                   (let [message (json/read-str (bytes-to-utf8-string payload))
+                         cron-exp (get message "cron")]
+                     (if (trigger-next? cron-exp)
+                       (let [ttl (ttl-to-next-poll)
+                             attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
+                         (amqp#basic/publish ch "" queue-name payload attributes)))
+                     (if (trigger-now? cron-exp)
+                       (let [type (get message "type")
+                             msg (get message "message")]
+                         (info "fire schedule, send message" (str "'" msg "'") "to" type)
+                         (amqp#basic/publish ch target-exchange type msg {:content-type "text/plain"})))))]
 
     (debug "starting schedule ... " url)
-    (setup-queues connection target-exchange)
+    (setup-queues ch)
+    (amqp#consumer/subscribe ch expired-queue-name listener {:auto-ack true})
     (info "started scheduler")
 
     (object
