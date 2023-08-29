@@ -61,7 +61,9 @@
 (operator shutdown)
 
 (defn amqp-scheduler [url target-exchange]
+  (debug "starting schedule... ")
   (debug "connecting to " url)
+
   (let [connection (amqp#core/connect {:uri url})
         ch (amqp#channel/open connection)
         listener (fn [ch meta ^bytes payload]
@@ -77,7 +79,7 @@
                          (info "fire schedule, send message" (str "'" msg "'") "to" type)
                          (amqp#basic/publish ch target-exchange type msg {:content-type "text/plain"})))))]
 
-    (debug "starting schedule ... " url)
+
     (setup-queues ch)
     (amqp#consumer/subscribe ch expired-queue-name listener {:auto-ack true})
     (info "started scheduler")
