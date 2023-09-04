@@ -42,11 +42,13 @@
                           (-> app
                               ring.middleware.json/wrap-json-body
                               ring.middleware.json/wrap-json-response)
-                          {:port 8080})]
+                          {:port 8080})
+
+        shutdown-scheduler (partial memo/shutdown scheduler)]
 
     (info "started service")
     (on-term-signal
       (info "stopping service...")
       (shutdown-server)
-      (memo/shutdown scheduler)
+      (shutdown-scheduler)
       (info "stopped server"))))
