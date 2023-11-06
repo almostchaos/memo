@@ -1,17 +1,14 @@
-{:paths
- ["src"]
- :deps
- {
-  com.taoensso/timbre     {:mvn/version "6.0.4"}
-  com.fzakaria/slf4j-timbre {:mvn/version "0.4.0"}
-  http-kit/http-kit       {:mvn/version "2.7.0"}
-  ring/ring-json {:mvn/version "0.5.1"}
-  org.clojure/core.async  {:mvn/version "1.6.673"}
-  compojure/compojure     {:mvn/version "1.7.0"}
-  com.novemberain/langohr {:mvn/version "5.4.0"}
-  org.clojure/data.json   {:mvn/version "2.3.1"}
-  joda-time/joda-time {:mvn/version "2.12.5"}
-  com.vodori/chronology {:mvn/version "0.1.2"}
-  almostchaos/yasos {:git/url "https://github.com/almostchaos/yasos" :tag "0.3" :sha "20b8b6a810e8b1a8b84f45d4dc99dd6a1b29c7a4"}}
- :aliases {}
- }
+{:paths   ["src"]
+ :deps    {
+           com.taoensso/timbre       {:mvn/version "6.0.4"}
+           com.fzakaria/slf4j-timbre {:mvn/version "0.4.0"}
+           http-kit/http-kit         {:mvn/version "2.7.0"}
+           ring/ring-json            {:mvn/version "0.5.1"}
+           org.clojure/core.async    {:mvn/version "1.6.673"}
+           compojure/compojure       {:mvn/version "1.7.0"}
+           com.novemberain/langohr   {:mvn/version "5.4.0"}
+           org.clojure/data.json     {:mvn/version "2.3.1"}
+           joda-time/joda-time       {:mvn/version "2.12.5"}
+           com.vodori/chronology     {:mvn/version "0.1.2"}
+           almostchaos/yasos         {:git/url "https://github.com/almostchaos/yasos" :tag "0.3" :sha "20b8b6a810e8b1a8b84f45d4dc99dd6a1b29c7a4"}}
+ :aliases {}}
