@@ -8,8 +8,7 @@
             [taoensso.timbre :refer [trace debug info warn error spy]]
             [clj-time.core :as time]
             [chronology.utils :as cron]
-            [clojure.data.json :as json]
-            [yasos.object :refer :all]))
+            [clojure.data.json :as json]))
 
 (def queue-name "memo.internal")
 (def expired-queue-name "memo.internal.expired")
@@ -55,18 +54,13 @@
                                      :arguments   {"x-queue-type"           "quorum"
                                                    "x-dead-letter-exchange" expired-exchange-name}}))
 
-(operator schedule)
-(operator unschedule)
-(operator unschedule-all)
-(operator shutdown)
-
 (defn amqp-scheduler [url target-exchange]
   (debug "starting schedule... ")
   (debug "connecting to " url)
 
   (let [connection (amqp#core/connect {:uri url})
         ch (amqp#channel/open connection)
-        listener (fn [ch meta ^bytes payload]
+        listener (fn [ch _ ^bytes payload]
                    (let [message (json/read-str (bytes-to-utf8-string payload))
                          cron-exp (get message "cron")]
                      (if (trigger-next? cron-exp)
@@ -84,46 +78,49 @@
     (amqp#consumer/subscribe ch expired-queue-name listener {:auto-ack true})
     (info "started scheduler")
 
-    (object
-      (method schedule [dest cron-exp message]
-        (debug (str "schedule events into " dest ", cron: " cron-exp ", message: " message))
-        (let [id (str (random-uuid))
-              ttl (time/in-millis poll-resolution)
-              payload (json/write-str {:id id :type dest :cron cron-exp :message message})
-              attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
-          (amqp#basic/publish ch "" queue-name payload attributes)
-          id))
+    {:schedule
+     (fn [dest cron-exp message]
+       (debug (str "schedule events into " dest ", cron: " cron-exp ", message: " message))
+       (let [id (str (random-uuid))
+             ttl (time/in-millis poll-resolution)
+             payload (json/write-str {:id id :type dest :cron cron-exp :message message})
+             attributes {:content-type "application/json" :persistent true :expiration (str ttl)}]
+         (amqp#basic/publish ch "" queue-name payload attributes)
+         id))
 
-      (method unschedule [id]
-        (debug (str "id: " id))
-        (let [temp-ch (amqp#channel/open connection)]
-          (amqp#consumer/subscribe
-            temp-ch queue-name
-            (fn [ch meta ^bytes payload]
-              (let [message (json/read-str (String. payload "UTF-8"))
-                    delivery-tag (:delivery-tag meta)
-                    match? (= id (get message "id"))]
-                (if match?
-                  (do
-                    (debug "unschedule" id "delivery-tag" delivery-tag)
-                    (amqp#basic/ack ch delivery-tag)
-                    (Thread/sleep 200)
-                    (amqp#core/close ch))
-                  (if (amqp#channel/open? ch)
-                    (amqp#basic/reject ch delivery-tag true)))))
-            {:auto-ack false})))
+     :unschedule
+     (fn [id]
+       (debug (str "id: " id))
+       (let [temp-ch (amqp#channel/open connection)]
+         (amqp#consumer/subscribe
+           temp-ch queue-name
+           (fn [ch meta ^bytes payload]
+             (let [message (json/read-str (String. payload "UTF-8"))
+                   delivery-tag (:delivery-tag meta)
+                   match? (= id (get message "id"))]
+               (if match?
+                 (do
+                   (debug "unschedule" id "delivery-tag" delivery-tag)
+                   (amqp#basic/ack ch delivery-tag)
+                   (Thread/sleep 200)
+                   (amqp#core/close ch))
+                 (if (amqp#channel/open? ch)
+                   (amqp#basic/reject ch delivery-tag true)))))
+           {:auto-ack false})))
 
-      (method unschedule-all []
-        (future
-          (while (or (not (amqp#queue/empty? ch queue-name)) (not (amqp#queue/empty? ch queue-name)))
-            (amqp#queue/purge ch expired-queue-name)
-            (amqp#queue/purge ch queue-name)
-            (Thread/sleep 1000))))
+     :unschedule-all
+     (fn []
+       (future
+         (while (or (not (amqp#queue/empty? ch queue-name)) (not (amqp#queue/empty? ch queue-name)))
+           (amqp#queue/purge ch expired-queue-name)
+           (amqp#queue/purge ch queue-name)
+           (Thread/sleep 1000))))
 
-      (method shutdown []
-        (info "stopping scheduler...")
-        (amqp#core/close connection)
-        (info "stopped scheduler")))))
+     :shutdown
+     (fn []
+       (info "stopping scheduler...")
+       (amqp#core/close connection)
+       (info "stopped scheduler"))}))
 
 (defn run []
   (let [env (System/getenv)

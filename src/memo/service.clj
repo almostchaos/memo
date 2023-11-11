@@ -15,25 +15,24 @@
 
 (defn -main [& args]
   (info "starting service...")
-  (let [scheduler (memo/run)
-
+  (let [{:keys [schedule unschedule unschedule-all] shutdown-scheduler :shutdown} (memo/run)
         app (routes
               (POST "/schedule" [:as request]
                 (let [body (:body request)
                       type (get body "type")
                       cron (get body "cron")
                       message (get body "message")
-                      schedule-id (memo/schedule scheduler type cron message)]
+                      schedule-id (schedule type cron message)]
                   {:body {:id schedule-id}}))
 
               (POST "/unschedule" [:as request]
                 (let [body (:body request)
                       id (get body "id")]
-                  (memo/unschedule scheduler id)
+                  (unschedule id)
                   {:body nil}))
 
               (POST "/unschedule-all" []
-                  (memo/unschedule-all scheduler)
+                  (unschedule-all)
                   {:body nil})
 
               (route/not-found "unknown endpoint"))
@@ -42,9 +41,7 @@
                           (-> app
                               ring.middleware.json/wrap-json-body
                               ring.middleware.json/wrap-json-response)
-                          {:port 8080})
-
-        shutdown-scheduler (partial memo/shutdown scheduler)]
+                          {:port 8080})]
 
     (info "started service")
     (on-term-signal
