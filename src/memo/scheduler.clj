@@ -14,8 +14,11 @@
 (def expired-queue-name "memo.internal.expired")
 (def expired-exchange-name "memo.internal.expired.exchange")
 
-(defn- bytes-to-utf8-string [b]
-  (String. b "UTF-8"))
+(defn- bytes-to-string
+  ([bytes]
+   (bytes-to-string bytes "UTF-8"))
+  ([bytes encoding]
+   (String. bytes encoding)))
 
 (def poll-resolution (time/minutes 1))
 
@@ -61,7 +64,7 @@
   (let [connection (amqp#core/connect {:uri url})
         ch (amqp#channel/open connection)
         listener (fn [ch _ ^bytes payload]
-                   (let [message (json/read-str (bytes-to-utf8-string payload))
+                   (let [message (json/read-str (bytes-to-string payload))
                          cron-exp (get message "cron")]
                      (if (trigger-next? cron-exp)
                        (let [ttl (ttl-to-next-poll)
